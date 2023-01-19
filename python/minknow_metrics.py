@@ -58,7 +58,7 @@ def main():
     # contents multiple times.
     reported_positions = list(manager.flow_cell_positions())
     if not reported_positions:
-        printf("No sequencing positions reported", file=sys.stderr)
+        print(f"No sequencing positions reported", file=sys.stderr)
         exit(1)
 
     # If a position has been specified on the command-line, filter out all the positions which don't contain the

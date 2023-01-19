@@ -1,10 +1,15 @@
-FROM        quay.io/prometheus/busybox:latest
-MAINTAINER  Daniel Qian <qsj.daniel@gmail.com>
+FROM        ubuntu:20.04
+MAINTAINER  Kuśmirek Wiktor <kusmirekwiktor@gmail.com>
 
 ARG TARGETARCH
-ARG BIN_DIR=.build/linux-${TARGETARCH}/
+ARG BIN_DIR=.
 
-COPY ${BIN_DIR}/kafka_exporter /bin/kafka_exporter
+RUN apt-get update
+RUN apt-get install -y python3 pip
+RUN pip install minknow_api
 
-EXPOSE     9308
-ENTRYPOINT [ "/bin/kafka_exporter" ]
+COPY ${BIN_DIR}/minknow_exporter /minknow_exporter
+COPY ${BIN_DIR}/python /python
+
+EXPOSE     9309
+ENTRYPOINT [ "/minknow_exporter" ]
