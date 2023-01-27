@@ -1,4 +1,5 @@
 from uuid import uuid4
+import uuid
 import logging
 from pathlib import Path
 from threading import Thread
@@ -6,10 +7,56 @@ import time
 import grpc
 import numpy as np
 import sys
-from minknow_api import manager_pb2
-from minknow_server import ManagerServer
+from minknow_server import ManagerServer, SequencingPositionServer, FlowCellInfo, PositionInfo
+from minknow_api import acquisition_pb2, manager_pb2, protocol_pb2, statistics_pb2
 
 LOGGER = logging.getLogger(__name__)
+
+minknowDefaultPort=9502
+port0=8000
+port1=8001
+port2=8002
+port3=8003
+port4=8004
+name0='X1'
+name1='X2'
+name2='X3'
+name3='X4'
+name4='X5'
+
+TEST_ACQUISITION = acquisition_pb2.AcquisitionRunInfo(run_id=str(uuid.uuid4()))
+
+TEST_PROTOCOL = protocol_pb2.ProtocolRunInfo(
+    run_id=str(uuid.uuid4()),
+)
+TEST_PROTOCOL_WITH_ACQUISTIIONS = protocol_pb2.ProtocolRunInfo(
+    run_id=str(uuid.uuid4()), acquisition_run_ids=[TEST_ACQUISITION.run_id]
+)
+
+TEST_ACQUISITION_OUTPUT_STATS = [
+    statistics_pb2.StreamAcquisitionOutputResponse(
+        snapshots=[
+            statistics_pb2.StreamAcquisitionOutputResponse.FilteredSnapshots(
+                filtering=[
+                    statistics_pb2.AcquisitionOutputKey(
+                        barcode_name="barcode1234",
+                        lamp_barcode_id="unclassified",
+                        lamp_target_id="unclassified",
+                        alignment_reference="unaligned",
+                    )
+                ],
+                snapshots=[
+                    statistics_pb2.AcquisitionOutputSnapshot(
+                        seconds=60,
+                        yield_summary=acquisition_pb2.AcquisitionYieldSummary(
+                            basecalled_pass_read_count=600
+                        ),
+                    )
+                ],
+            )
+        ]
+    )
+]
 
 def mock():
     positions = [
@@ -85,33 +132,51 @@ def mock():
 #          the same as the `name` field.  For a P2 Solo, this will be the
 #          name of the P2 Solo unit.  Since 5.3
         manager_pb2.FlowCellPosition(
-            name="X1",
+            name=name0,
             state=manager_pb2.FlowCellPosition.State.STATE_RUNNING,
-            rpc_ports=manager_pb2.FlowCellPosition.RpcPorts(secure=8000),
+            rpc_ports=manager_pb2.FlowCellPosition.RpcPorts(secure=port0),
         ),
         manager_pb2.FlowCellPosition(
-            name="X2",
+            name=name1,
             state=manager_pb2.FlowCellPosition.State.STATE_RUNNING,
-            rpc_ports=manager_pb2.FlowCellPosition.RpcPorts(secure=8001),
+            rpc_ports=manager_pb2.FlowCellPosition.RpcPorts(secure=port1),
         ),
         manager_pb2.FlowCellPosition(
-            name="X3",
+            name=name2,
             state=manager_pb2.FlowCellPosition.State.STATE_RUNNING,
-            rpc_ports=manager_pb2.FlowCellPosition.RpcPorts(secure=8002),
+            rpc_ports=manager_pb2.FlowCellPosition.RpcPorts(secure=port2),
         ),
         manager_pb2.FlowCellPosition(
-            name="X4",
+            name=name3,
             state=manager_pb2.FlowCellPosition.State.STATE_RUNNING,
-            rpc_ports=manager_pb2.FlowCellPosition.RpcPorts(secure=8003),
+            rpc_ports=manager_pb2.FlowCellPosition.RpcPorts(secure=port3),
         ),
         manager_pb2.FlowCellPosition(
-            name="X5",
+            name=name4,
             state=manager_pb2.FlowCellPosition.State.STATE_INITIALISING
         ),
     ]
 
-    with ManagerServer(positions=positions, port=9502) as server:
-        time.sleep(20000)
+    with SequencingPositionServer(PositionInfo(position_name=name0),port=port0) as sequencing_position_0, SequencingPositionServer(PositionInfo(position_name=name1),port=port1) as sequencing_position_1, SequencingPositionServer(PositionInfo(position_name=name2),port=port2) as sequencing_position_2, SequencingPositionServer(PositionInfo(position_name=name3),port=port3) as sequencing_position_3, SequencingPositionServer(PositionInfo(position_name=name4),port=port4) as sequencing_position_4:
+
+        sequencing_position_0.set_protocol_runs([TEST_PROTOCOL_WITH_ACQUISTIIONS])
+        sequencing_position_0.set_acquisition_runs([TEST_ACQUISITION])
+        sequencing_position_0.set_acquisition_output_statistics(TEST_ACQUISITION.run_id, TEST_ACQUISITION_OUTPUT_STATS)
+        sequencing_position_1.set_protocol_runs([TEST_PROTOCOL_WITH_ACQUISTIIONS])
+        sequencing_position_1.set_acquisition_runs([TEST_ACQUISITION])
+        sequencing_position_1.set_acquisition_output_statistics(TEST_ACQUISITION.run_id, TEST_ACQUISITION_OUTPUT_STATS)
+        sequencing_position_2.set_protocol_runs([TEST_PROTOCOL_WITH_ACQUISTIIONS])
+        sequencing_position_2.set_acquisition_runs([TEST_ACQUISITION])
+        sequencing_position_2.set_acquisition_output_statistics(TEST_ACQUISITION.run_id, TEST_ACQUISITION_OUTPUT_STATS)
+        sequencing_position_3.set_protocol_runs([TEST_PROTOCOL_WITH_ACQUISTIIONS])
+        sequencing_position_3.set_acquisition_runs([TEST_ACQUISITION])
+        sequencing_position_3.set_acquisition_output_statistics(TEST_ACQUISITION.run_id, TEST_ACQUISITION_OUTPUT_STATS)
+        sequencing_position_4.set_protocol_runs([TEST_PROTOCOL_WITH_ACQUISTIIONS])
+        sequencing_position_4.set_acquisition_runs([TEST_ACQUISITION])
+        sequencing_position_4.set_acquisition_output_statistics(TEST_ACQUISITION.run_id, TEST_ACQUISITION_OUTPUT_STATS)
+
+        with ManagerServer(positions=positions, port=minknowDefaultPort) as server:
+            time.sleep(20000)
 
 if __name__ == "__main__":
     mock()

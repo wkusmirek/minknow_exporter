@@ -1,8 +1,5 @@
 import argparse
 import json
-
-# minknow_api.manager supplies "Manager" a wrapper around MinKNOW's Manager gRPC API with utilities for
-# querying sequencing positions + offline basecalling tools.
 from minknow_api.manager import Manager
 
 
@@ -15,7 +12,7 @@ def main():
         "--host", default="localhost", help="Specify which host to connect to."
     )
     parser.add_argument(
-        "--port", default=None, help="Specify which porer to connect to."
+        "--port", default=9502, help="Specify which port to connect to."
     )
 
     args = parser.parse_args()
@@ -26,23 +23,13 @@ def main():
     # Find a list of currently available sequencing positions.
     positions = manager.flow_cell_positions()
 
-    # Print out available positions.
-#    print("Available sequencing positions on %s:%s:" % (args.host, args.port))
-#    for pos in positions:
-#        print("%s: %s" % (pos.name, pos.state))
-
-#        if pos.running:
-#            print("  secure: %s" % pos.description.rpc_ports.secure)
-
-            # User could call {pos.connect()} here to connect to the running MinKNOW instance.
-            
-            
     result = list()
     for pos in positions:
         vars = dict()
+        vars['address'] = str(args.host) + ':' + str(args.port)
         vars['name'] = pos.name
         vars['state'] = pos.state
-        #vars['rpc_ports'] = pos.description.rpc_ports.secure
+        vars['port'] = pos.description.rpc_ports.secure
         result.append(vars)
     print('[' + ','.join(json.dumps(d) for d in result) + ']')
 

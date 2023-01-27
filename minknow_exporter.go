@@ -44,6 +44,7 @@ const (
 var (
 	clusterBrokers    *prometheus.Desc
 	topicOldestOffset *prometheus.Desc
+	topicPartitionLeader *prometheus.Desc
 )
 
 type Exporter struct {
@@ -282,6 +283,7 @@ func NewExporter(opts kafkaOpts, topicFilter string, groupFilter string) (*Expor
 func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- clusterBrokers
 	ch <- topicOldestOffset
+	ch <- topicPartitionLeader
 }
 
 // Collect fetches the stats from configured Kafka location and delivers them
@@ -336,10 +338,20 @@ func (e *Exporter) collectChans(quit chan struct{}) {
 }
 
 type ServiceData struct {
+    Address     string `json:'address'`
     Name     string `json:'name'`
     State    string `json:'state'`
 }
 
+type RRRR struct {
+    Address     string `json:'address'`
+    Name     string `json:'name'`
+    Seconds    string `json:'seconds'`
+    Basecalled_pass_read_count    string `json:'basecalled_pass_read_count'`
+    Basecalled_fail_read_count    string `json:'basecalled_fail_read_count'`
+    Basecalled_samples    string `json:'basecalled_samples'`
+}
+                
 func (e *Exporter) collect(ch chan<- prometheus.Metric) {
 	var flowCells []*ServiceData
 	result, err := exec.Command("python3", "python/list_sequencing_positions.py").Output()
@@ -350,14 +362,28 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) {
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	for _, flowCell := range flowCells {
-	        fmt.Println(flowCell.Name)
-	 	fmt.Println(flowCell.State)
 	 	ch <- prometheus.MustNewConstMetric(
-			topicOldestOffset, prometheus.GaugeValue, float64(1), flowCell.Name, flowCell.State,
+			topicOldestOffset, prometheus.GaugeValue, float64(1), flowCell.Address, flowCell.Name, flowCell.State,
 		)
 	}
+	
+	var statistics []*RRRR
+	result2, err2 := exec.Command("python3", "python/extract_run_statistics.py").Output()
+	if err2 != nil {
+		log.Fatal(err2)
+	}
+	err2 = json.Unmarshal([]byte(result2), &statistics);
+	if err2 != nil {
+		log.Fatal(err2)
+	}
+	for _, statistic := range statistics {
+	 	ch <- prometheus.MustNewConstMetric(
+			topicPartitionLeader, prometheus.GaugeValue, float64(1), statistic.Address, statistic.Name, statistic.Seconds, statistic.Basecalled_pass_read_count, statistic.Basecalled_fail_read_count, statistic.Basecalled_samples,
+		)
+	}	
+	
+	
 	//	ch <- prometheus.MustNewConstMetric(
 	//		topicOldestOffset, prometheus.GaugeValue, float64(1), "asd",
 	//)
@@ -845,9 +871,13 @@ func setup(
 	topicOldestOffset = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "flowcell", "info"),
 		"Flowcell info",
-		[]string{"name", "state"}, labels,
+		[]string{"address", "name", "state"}, labels,
 	)
-
+	topicPartitionLeader = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "flowcell", "stats"),
+		"Stats",
+		[]string{"address", "name", "seconds", "basecalled_pass_read_count", "basecalled_fail_read_count", "basecalled_samples"}, labels,
+	)
 	/*topicPartitionLeader = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "topic", "partition_leader"),
 		"Leader Broker ID of this Topic/Partition",
