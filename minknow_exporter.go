@@ -16,7 +16,7 @@ import (
 	"strings"
 	"sync"
 	"time"
-	
+
 	"github.com/Shopify/sarama"
 	"github.com/krallistic/kazoo-go"
 	"github.com/pkg/errors"
@@ -42,9 +42,26 @@ const (
 )
 
 var (
-	clusterBrokers    *prometheus.Desc
-	topicOldestOffset *prometheus.Desc
-	topicPartitionLeader *prometheus.Desc
+	clusterBrokers                   *prometheus.Desc
+	topicOldestOffset                *prometheus.Desc
+	topicPartitionLeader             *prometheus.Desc
+	readCountMetric                  *prometheus.Desc
+	fractionBasecalledMetric         *prometheus.Desc
+	fractionSkippedMetric            *prometheus.Desc
+	basecalledPassReadCountMetric    *prometheus.Desc
+	basecalledFailReadCountMetric    *prometheus.Desc
+	basecalledSkippedReadCountMetric *prometheus.Desc
+	basecalledPassBasesMetric        *prometheus.Desc
+	basecalledFailBasesMetric        *prometheus.Desc
+	basecalledSamplesMetric          *prometheus.Desc
+	selectedRawSamplesMetric         *prometheus.Desc
+	selectedEventsMetric             *prometheus.Desc
+	estimatedSelectedBasesMetric     *prometheus.Desc
+	alignmentMatchesMetric           *prometheus.Desc
+	alignmentMismatchesMetric        *prometheus.Desc
+	alignmentInsertionsMetric        *prometheus.Desc
+	alignmentDeletionsMetric         *prometheus.Desc
+	alignmentCoverageMetric          *prometheus.Desc
 )
 
 type Exporter struct {
@@ -284,6 +301,23 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- clusterBrokers
 	ch <- topicOldestOffset
 	ch <- topicPartitionLeader
+	ch <- readCountMetric
+	ch <- fractionBasecalledMetric
+	ch <- fractionSkippedMetric
+	ch <- basecalledPassReadCountMetric
+	ch <- basecalledFailReadCountMetric
+	ch <- basecalledSkippedReadCountMetric
+	ch <- basecalledPassBasesMetric
+	ch <- basecalledFailBasesMetric
+	ch <- basecalledSamplesMetric
+	ch <- selectedRawSamplesMetric
+	ch <- selectedEventsMetric
+	ch <- estimatedSelectedBasesMetric
+	ch <- alignmentMatchesMetric
+	ch <- alignmentMismatchesMetric
+	ch <- alignmentInsertionsMetric
+	ch <- alignmentDeletionsMetric
+	ch <- alignmentCoverageMetric
 }
 
 // Collect fetches the stats from configured Kafka location and delivers them
@@ -338,52 +372,181 @@ func (e *Exporter) collectChans(quit chan struct{}) {
 }
 
 type ServiceData struct {
-    Address     string `json:'address'`
-    Name     string `json:'name'`
-    State    string `json:'state'`
+	Address string `json:'address'`
+	Name    string `json:'name'`
+	State   string `json:'state'`
 }
 
 type RRRR struct {
-    Address     string `json:'address'`
-    Name     string `json:'name'`
-    Seconds    string `json:'seconds'`
-    Basecalled_pass_read_count    string `json:'basecalled_pass_read_count'`
-    Basecalled_fail_read_count    string `json:'basecalled_fail_read_count'`
-    Basecalled_samples    string `json:'basecalled_samples'`
+	Address                       string `json:'address'`
+	Name                          string `json:'name'`
+	Seconds                       string `json:'seconds'`
+	Read_count                    string `json:'read_count'`
+	Fraction_basecalled           string `json:'fraction_basecalled'`
+	Fraction_skipped              string `json:'fraction_skipped'`
+	Basecalled_pass_read_count    string `json:'basecalled_pass_read_count'`
+	Basecalled_fail_read_count    string `json:'basecalled_fail_read_count'`
+	Basecalled_skipped_read_count string `json:'basecalled_skipped_read_count'`
+	Basecalled_pass_bases         string `json:'basecalled_pass_bases'`
+	Basecalled_fail_bases         string `json:'basecalled_fail_bases'`
+	Basecalled_samples            string `json:'basecalled_samples'`
+	Selected_raw_samples          string `json:'selected_raw_samples'`
+	Selected_events               string `json:'selected_events'`
+	Estimated_selected_bases      string `json:'estimated_selected_bases'`
+	Alignment_matches             string `json:'alignment_matches'`
+	Alignment_mismatches          string `json:'alignment_mismatches'`
+	Alignment_insertions          string `json:'alignment_insertions'`
+	Alignment_deletions           string `json:'alignment_deletions'`
+	Alignment_coverage            string `json:'alignment_coverage'`
 }
-                
+
 func (e *Exporter) collect(ch chan<- prometheus.Metric) {
 	var flowCells []*ServiceData
 	result, err := exec.Command("python3", "python/list_sequencing_positions.py").Output()
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = json.Unmarshal([]byte(result), &flowCells);
+	err = json.Unmarshal([]byte(result), &flowCells)
 	if err != nil {
 		log.Fatal(err)
 	}
 	for _, flowCell := range flowCells {
-	 	ch <- prometheus.MustNewConstMetric(
+		ch <- prometheus.MustNewConstMetric(
 			topicOldestOffset, prometheus.GaugeValue, float64(1), flowCell.Address, flowCell.Name, flowCell.State,
 		)
 	}
-	
+
 	var statistics []*RRRR
 	result2, err2 := exec.Command("python3", "python/extract_run_statistics.py").Output()
 	if err2 != nil {
 		log.Fatal(err2)
 	}
-	err2 = json.Unmarshal([]byte(result2), &statistics);
+	err2 = json.Unmarshal([]byte(result2), &statistics)
 	if err2 != nil {
 		log.Fatal(err2)
 	}
 	for _, statistic := range statistics {
-	 	ch <- prometheus.MustNewConstMetric(
-			topicPartitionLeader, prometheus.GaugeValue, float64(1), statistic.Address, statistic.Name, statistic.Seconds, statistic.Basecalled_pass_read_count, statistic.Basecalled_fail_read_count, statistic.Basecalled_samples,
+		Read_count, _ := strconv.Atoi(statistic.Read_count)
+		Fraction_basecalled, _ := strconv.Atoi(statistic.Fraction_basecalled)
+		Fraction_skipped, _ := strconv.Atoi(statistic.Fraction_skipped)
+		Basecalled_pass_read_count, _ := strconv.Atoi(statistic.Basecalled_pass_read_count)
+		Basecalled_fail_read_count, _ := strconv.Atoi(statistic.Basecalled_fail_read_count)
+		Basecalled_skipped_read_count, _ := strconv.Atoi(statistic.Basecalled_skipped_read_count)
+		Basecalled_pass_bases, _ := strconv.Atoi(statistic.Basecalled_pass_bases)
+		Basecalled_fail_bases, _ := strconv.Atoi(statistic.Basecalled_fail_bases)
+		Basecalled_samples, _ := strconv.Atoi(statistic.Basecalled_samples)
+		Selected_raw_samples, _ := strconv.Atoi(statistic.Selected_raw_samples)
+		Selected_events, _ := strconv.Atoi(statistic.Selected_events)
+		Estimated_selected_bases, _ := strconv.Atoi(statistic.Estimated_selected_bases)
+		Alignment_matches, _ := strconv.Atoi(statistic.Alignment_matches)
+		Alignment_mismatches, _ := strconv.Atoi(statistic.Alignment_mismatches)
+		Alignment_insertions, _ := strconv.Atoi(statistic.Alignment_insertions)
+		Alignment_deletions, _ := strconv.Atoi(statistic.Alignment_deletions)
+		Alignment_coverage, _ := strconv.Atoi(statistic.Alignment_coverage)
+		ch <- prometheus.MustNewConstMetric(
+			readCountMetric, prometheus.GaugeValue, float64(Read_count),
+			statistic.Address,
+			statistic.Name,
+			statistic.Seconds,
 		)
-	}	
-	
-	
+		ch <- prometheus.MustNewConstMetric(
+			fractionBasecalledMetric, prometheus.GaugeValue, float64(Fraction_basecalled),
+			statistic.Address,
+			statistic.Name,
+			statistic.Seconds,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			fractionSkippedMetric, prometheus.GaugeValue, float64(Fraction_skipped),
+			statistic.Address,
+			statistic.Name,
+			statistic.Seconds,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			basecalledPassReadCountMetric, prometheus.GaugeValue, float64(Basecalled_pass_read_count),
+			statistic.Address,
+			statistic.Name,
+			statistic.Seconds,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			basecalledFailReadCountMetric, prometheus.GaugeValue, float64(Basecalled_fail_read_count),
+			statistic.Address,
+			statistic.Name,
+			statistic.Seconds,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			basecalledSkippedReadCountMetric, prometheus.GaugeValue, float64(Basecalled_skipped_read_count),
+			statistic.Address,
+			statistic.Name,
+			statistic.Seconds,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			basecalledPassBasesMetric, prometheus.GaugeValue, float64(Basecalled_pass_bases),
+			statistic.Address,
+			statistic.Name,
+			statistic.Seconds,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			basecalledFailBasesMetric, prometheus.GaugeValue, float64(Basecalled_fail_bases),
+			statistic.Address,
+			statistic.Name,
+			statistic.Seconds,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			basecalledSamplesMetric, prometheus.GaugeValue, float64(Basecalled_samples),
+			statistic.Address,
+			statistic.Name,
+			statistic.Seconds,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			selectedRawSamplesMetric, prometheus.GaugeValue, float64(Selected_raw_samples),
+			statistic.Address,
+			statistic.Name,
+			statistic.Seconds,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			selectedEventsMetric, prometheus.GaugeValue, float64(Selected_events),
+			statistic.Address,
+			statistic.Name,
+			statistic.Seconds,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			estimatedSelectedBasesMetric, prometheus.GaugeValue, float64(Estimated_selected_bases),
+			statistic.Address,
+			statistic.Name,
+			statistic.Seconds,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			alignmentMatchesMetric, prometheus.GaugeValue, float64(Alignment_matches),
+			statistic.Address,
+			statistic.Name,
+			statistic.Seconds,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			alignmentMismatchesMetric, prometheus.GaugeValue, float64(Alignment_mismatches),
+			statistic.Address,
+			statistic.Name,
+			statistic.Seconds,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			alignmentInsertionsMetric, prometheus.GaugeValue, float64(Alignment_insertions),
+			statistic.Address,
+			statistic.Name,
+			statistic.Seconds,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			alignmentDeletionsMetric, prometheus.GaugeValue, float64(Alignment_deletions),
+			statistic.Address,
+			statistic.Name,
+			statistic.Seconds,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			alignmentCoverageMetric, prometheus.GaugeValue, float64(Alignment_coverage),
+			statistic.Address,
+			statistic.Name,
+			statistic.Seconds,
+		)
+	}
+
 	//	ch <- prometheus.MustNewConstMetric(
 	//		topicOldestOffset, prometheus.GaugeValue, float64(1), "asd",
 	//)
@@ -873,10 +1036,184 @@ func setup(
 		"Flowcell info",
 		[]string{"address", "name", "state"}, labels,
 	)
-	topicPartitionLeader = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "flowcell", "stats"),
+	readCountMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "read_count"),
 		"Stats",
-		[]string{"address", "name", "seconds", "basecalled_pass_read_count", "basecalled_fail_read_count", "basecalled_samples"}, labels,
+		[]string{
+			"address",
+			"name",
+			"seconds",
+		}, labels,
+	)
+	fractionBasecalledMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "fraction_basecalled"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+			"seconds",
+		}, labels,
+	)
+	fractionSkippedMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "fraction_skipped"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+			"seconds",
+		}, labels,
+	)
+	basecalledPassReadCountMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "basecalled_pass_read_count"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+			"seconds",
+		}, labels,
+	)
+	basecalledFailReadCountMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "basecalled_fail_read_count"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+			"seconds",
+		}, labels,
+	)
+	basecalledSkippedReadCountMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "basecalled_skipped_read_count"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+			"seconds",
+		}, labels,
+	)
+	basecalledPassBasesMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "basecalled_pass_bases"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+			"seconds",
+		}, labels,
+	)
+	basecalledFailBasesMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "basecalled_fail_bases"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+			"seconds",
+		}, labels,
+	)
+	basecalledSamplesMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "basecalled_samples"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+			"seconds",
+		}, labels,
+	)
+	selectedRawSamplesMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "selected_raw_samples"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+			"seconds",
+		}, labels,
+	)
+	selectedEventsMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "selected_events"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+			"seconds",
+		}, labels,
+	)
+	estimatedSelectedBasesMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "estimated_selected_bases"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+			"seconds",
+		}, labels,
+	)
+	alignmentMatchesMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "alignment_matches"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+			"seconds",
+		}, labels,
+	)
+	alignmentMismatchesMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "alignment_mismatches"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+			"seconds",
+		}, labels,
+	)
+	alignmentInsertionsMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "alignment_insertions"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+			"seconds",
+		}, labels,
+	)
+	alignmentDeletionsMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "alignment_deletions"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+			"seconds",
+		}, labels,
+	)
+	alignmentCoverageMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "alignment_coverage"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+			"seconds",
+		}, labels,
+	)
+	topicPartitionLeader = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "stats"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+			"seconds",
+			"read_count",
+			"fraction_basecalled",
+			"fraction_skipped",
+			"basecalled_pass_read_count",
+			"basecalled_fail_read_count",
+			"basecalled_skipped_read_count",
+			"basecalled_pass_bases",
+			"basecalled_fail_bases",
+			"basecalled_samples",
+			"selected_raw_samples",
+			"selected_events",
+			"estimated_selected_bases",
+			"alignment_matches",
+			"alignment_mismatches",
+			"alignment_insertions",
+			"alignment_deletions",
+			"alignment_coverage",
+		}, labels,
 	)
 	/*topicPartitionLeader = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "topic", "partition_leader"),

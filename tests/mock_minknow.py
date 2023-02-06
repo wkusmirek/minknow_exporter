@@ -1,3 +1,4 @@
+# sudo kill $(ps aux | grep '9502' | awk '{print $2}')
 from uuid import uuid4
 import uuid
 import logging
@@ -7,6 +8,7 @@ import time
 import grpc
 import numpy as np
 import sys
+import time, random
 from minknow_server import ManagerServer, SequencingPositionServer, FlowCellInfo, PositionInfo
 from minknow_api import acquisition_pb2, manager_pb2, protocol_pb2, statistics_pb2
 
@@ -33,30 +35,121 @@ TEST_PROTOCOL_WITH_ACQUISTIIONS = protocol_pb2.ProtocolRunInfo(
     run_id=str(uuid.uuid4()), acquisition_run_ids=[TEST_ACQUISITION.run_id]
 )
 
-TEST_ACQUISITION_OUTPUT_STATS = [
-    statistics_pb2.StreamAcquisitionOutputResponse(
-        snapshots=[
-            statistics_pb2.StreamAcquisitionOutputResponse.FilteredSnapshots(
-                filtering=[
-                    statistics_pb2.AcquisitionOutputKey(
-                        barcode_name="barcode1234",
-                        lamp_barcode_id="unclassified",
-                        lamp_target_id="unclassified",
-                        alignment_reference="unaligned",
-                    )
-                ],
-                snapshots=[
-                    statistics_pb2.AcquisitionOutputSnapshot(
-                        seconds=60,
-                        yield_summary=acquisition_pb2.AcquisitionYieldSummary(
-                            basecalled_pass_read_count=600
-                        ),
-                    )
-                ],
-            )
-        ]
-    )
-]
+def generateTestAcquistionOutputStats():
+    read_count = round((round(time.time())%(72*24*3600))/10) # single new read per 10 sec
+    TEST_ACQUISITION_OUTPUT_STATS = [
+        statistics_pb2.StreamAcquisitionOutputResponse(
+            snapshots=[
+                statistics_pb2.StreamAcquisitionOutputResponse.FilteredSnapshots(
+                    filtering=[
+                        statistics_pb2.AcquisitionOutputKey(
+                            barcode_name="barcode1234",
+                            lamp_barcode_id="unclassified",
+                            lamp_target_id="unclassified",
+                            alignment_reference="unaligned",
+                        )
+                    ],
+                    snapshots=[
+                        statistics_pb2.AcquisitionOutputSnapshot(
+                            seconds=60,
+                            yield_summary=acquisition_pb2.AcquisitionYieldSummary(
+                                # Number of reads selected by analysis as good reads.
+                                #
+                                # The reads in this counter are completed, but not necessarily on disk yet.
+                                read_count = read_count,
+                                # This is the fraction of whole reads that the base-caller has finished
+                                # with. The value should be in the range [0.0, 1.0]
+                                #
+                                # When base-calling is enabled, it can be added to fraction_skipped and
+                                # multiplied by 100 to give the percentage of reads processed and by
+                                # implication, the percentage of reads the user is waiting for the
+                                # base-caller to process.
+                                #
+                                # Since 5.0
+                                fraction_basecalled = random.uniform(0.60,0.70),
+
+                                # This is the fraction of whole reads that have been skipped. The value
+                                # should be in the range [0.0, 1.0]
+                                #
+                                # Since 5.0
+                                fraction_skipped = random.uniform(0.10,0.15),
+
+                                # Number of reads successfully basecalled.
+                                basecalled_pass_read_count = round(read_count*random.uniform(0.60,0.70)*0.9),
+
+                                # Number of reads which have failed to basecall.
+                                basecalled_fail_read_count = round(read_count*random.uniform(0.60,0.70)*0.1),
+
+                                # Number of reads which have been skipped
+                                basecalled_skipped_read_count = round(read_count*random.uniform(0.10,0.15)),
+
+                                # Number of bases which have been called and classed as pass.
+                                basecalled_pass_bases = round(read_count*random.uniform(0.60,0.70)*0.9)*10000,
+
+                                # Number of bases which have been called and were classed as fail.
+                                basecalled_fail_bases = round(read_count*random.uniform(0.60,0.70)*0.1)*10000,
+
+                                # Number of raw samples which have been called.
+                                basecalled_samples = 1,
+
+                                # Number of minknow raw samples which have been selected
+                                # for writing to disk as reads.
+                                selected_raw_samples = 1,
+
+                                # Number of minknow events which have been selected
+                                # for writing to disk as reads.
+                                selected_events = 1,
+
+                                # Estimated number of bases MinKNOW has selected for writing.
+                                # This is estimated based on already called bases and samples.
+                                estimated_selected_bases = 9,
+
+                                # Number of bases which have matched target reference.
+                                #
+                                # Only specified when running live alignment.
+                                #
+                                # Since 4.0
+                                alignment_matches = 14,
+
+                                # Number of bases which have not matched target reference.
+                                #
+                                # Only specified when running live alignment.
+                                #
+                                # Since 4.0
+                                alignment_mismatches = 15,
+
+                                # Number of bases which were inserted into
+                                # alignments that matched the reference.
+                                #
+                                # Only specified when running live alignment.
+                                #
+                                # Since 4.0
+                                alignment_insertions = 16,
+
+                                # Number of bases which were deleted from
+                                # alignments that matched the reference.
+                                #
+                                # Only specified when running live alignment.
+                                #
+                                # Since 4.0
+                                alignment_deletions = 17,
+
+                                # Number of bases that match the target reference(s) expressed as a
+                                # fraction of the total size of the target reference(s).
+                                #
+                                # eg: For a specified alignment-targets with 2000 and 3000 bases, if
+                                # "alignment_matches" is 2500, then "alignment_coverage" will be 0.5
+                                #
+                                # Since 4.3
+                                alignment_coverage = 19
+                            ),
+                        )
+                    ],
+                )
+            ]
+        )
+    ]
+    return TEST_ACQUISITION_OUTPUT_STATS
 
 def mock():
     positions = [
@@ -159,24 +252,24 @@ def mock():
 
     with SequencingPositionServer(PositionInfo(position_name=name0),port=port0) as sequencing_position_0, SequencingPositionServer(PositionInfo(position_name=name1),port=port1) as sequencing_position_1, SequencingPositionServer(PositionInfo(position_name=name2),port=port2) as sequencing_position_2, SequencingPositionServer(PositionInfo(position_name=name3),port=port3) as sequencing_position_3, SequencingPositionServer(PositionInfo(position_name=name4),port=port4) as sequencing_position_4:
 
-        sequencing_position_0.set_protocol_runs([TEST_PROTOCOL_WITH_ACQUISTIIONS])
-        sequencing_position_0.set_acquisition_runs([TEST_ACQUISITION])
-        sequencing_position_0.set_acquisition_output_statistics(TEST_ACQUISITION.run_id, TEST_ACQUISITION_OUTPUT_STATS)
-        sequencing_position_1.set_protocol_runs([TEST_PROTOCOL_WITH_ACQUISTIIONS])
-        sequencing_position_1.set_acquisition_runs([TEST_ACQUISITION])
-        sequencing_position_1.set_acquisition_output_statistics(TEST_ACQUISITION.run_id, TEST_ACQUISITION_OUTPUT_STATS)
-        sequencing_position_2.set_protocol_runs([TEST_PROTOCOL_WITH_ACQUISTIIONS])
-        sequencing_position_2.set_acquisition_runs([TEST_ACQUISITION])
-        sequencing_position_2.set_acquisition_output_statistics(TEST_ACQUISITION.run_id, TEST_ACQUISITION_OUTPUT_STATS)
-        sequencing_position_3.set_protocol_runs([TEST_PROTOCOL_WITH_ACQUISTIIONS])
-        sequencing_position_3.set_acquisition_runs([TEST_ACQUISITION])
-        sequencing_position_3.set_acquisition_output_statistics(TEST_ACQUISITION.run_id, TEST_ACQUISITION_OUTPUT_STATS)
-        sequencing_position_4.set_protocol_runs([TEST_PROTOCOL_WITH_ACQUISTIIONS])
-        sequencing_position_4.set_acquisition_runs([TEST_ACQUISITION])
-        sequencing_position_4.set_acquisition_output_statistics(TEST_ACQUISITION.run_id, TEST_ACQUISITION_OUTPUT_STATS)
-
         with ManagerServer(positions=positions, port=minknowDefaultPort) as server:
-            time.sleep(20000)
+            while True:
+                sequencing_position_0.set_protocol_runs([TEST_PROTOCOL_WITH_ACQUISTIIONS])
+                sequencing_position_0.set_acquisition_runs([TEST_ACQUISITION])
+                sequencing_position_0.set_acquisition_output_statistics(TEST_ACQUISITION.run_id, generateTestAcquistionOutputStats())
+                sequencing_position_1.set_protocol_runs([TEST_PROTOCOL_WITH_ACQUISTIIONS])
+                sequencing_position_1.set_acquisition_runs([TEST_ACQUISITION])
+                sequencing_position_1.set_acquisition_output_statistics(TEST_ACQUISITION.run_id, generateTestAcquistionOutputStats())
+                sequencing_position_2.set_protocol_runs([TEST_PROTOCOL_WITH_ACQUISTIIONS])
+                sequencing_position_2.set_acquisition_runs([TEST_ACQUISITION])
+                sequencing_position_2.set_acquisition_output_statistics(TEST_ACQUISITION.run_id, generateTestAcquistionOutputStats())
+                sequencing_position_3.set_protocol_runs([TEST_PROTOCOL_WITH_ACQUISTIIONS])
+                sequencing_position_3.set_acquisition_runs([TEST_ACQUISITION])
+                sequencing_position_3.set_acquisition_output_statistics(TEST_ACQUISITION.run_id, generateTestAcquistionOutputStats())
+                sequencing_position_4.set_protocol_runs([TEST_PROTOCOL_WITH_ACQUISTIIONS])
+                sequencing_position_4.set_acquisition_runs([TEST_ACQUISITION])
+                sequencing_position_4.set_acquisition_output_statistics(TEST_ACQUISITION.run_id, generateTestAcquistionOutputStats())
+                time.sleep(1)
 
 if __name__ == "__main__":
     mock()

@@ -73,13 +73,31 @@ def dump_statistics_for_acquisition(connection, acquisition_run_id, args):
             #
             # See `acquisition.AcquisitionYieldSummary` in acquisition.proto for other fields that could be queried here.
             for snapshot in filter_group.snapshots:
+                # TODO brac tylko ostatni snapshot!!!!!!!!!!!!!!!!!!!!!!!!!
                 vars = dict()
                 vars['address'] = str(args.host) + ':' + str(args.port)
                 vars['name'] = args.position
                 vars['seconds'] = str(snapshot.seconds)
+                vars['read_count'] = str(snapshot.yield_summary.read_count)
+                vars['fraction_basecalled'] = str(snapshot.yield_summary.fraction_basecalled)
+                vars['fraction_skipped'] = str(snapshot.yield_summary.fraction_skipped)
                 vars['basecalled_pass_read_count'] = str(snapshot.yield_summary.basecalled_pass_read_count)
                 vars['basecalled_fail_read_count'] = str(snapshot.yield_summary.basecalled_fail_read_count)
+                vars['basecalled_skipped_read_count'] = str(snapshot.yield_summary.basecalled_skipped_read_count)
+                vars['basecalled_pass_bases'] = str(snapshot.yield_summary.basecalled_pass_bases)
+                vars['basecalled_fail_bases'] = str(snapshot.yield_summary.basecalled_fail_bases)
                 vars['basecalled_samples'] = str(snapshot.yield_summary.basecalled_samples)
+                vars['selected_raw_samples'] = str(snapshot.yield_summary.selected_raw_samples)
+                vars['selected_events'] = str(snapshot.yield_summary.selected_events)
+                vars['estimated_selected_bases'] = str(snapshot.yield_summary.estimated_selected_bases)
+                vars['alignment_matches'] = str(snapshot.yield_summary.alignment_matches)
+                vars['alignment_mismatches'] = str(snapshot.yield_summary.alignment_mismatches)
+                vars['alignment_insertions'] = str(snapshot.yield_summary.alignment_insertions)
+                vars['alignment_deletions'] = str(snapshot.yield_summary.alignment_deletions)
+                vars['alignment_coverage'] = str(snapshot.yield_summary.alignment_coverage)
+                #vars['basecalled_pass_read_count'] = str(snapshot.yield_summary.basecalled_pass_read_count)
+                #vars['basecalled_fail_read_count'] = str(snapshot.yield_summary.basecalled_fail_read_count)
+                #vars['basecalled_samples'] = str(snapshot.yield_summary.basecalled_samples)
                 #cells = [
                 #    snapshot.seconds,  # timestamp(s)
                 #    snapshot.yield_summary.basecalled_pass_read_count,  # Passed Called reads
