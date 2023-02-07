@@ -7,7 +7,7 @@ from threading import Thread
 import time
 import grpc
 import numpy as np
-import sys
+import sys, csv, time
 import time, random
 from minknow_server import ManagerServer, SequencingPositionServer, FlowCellInfo, PositionInfo
 from minknow_api import acquisition_pb2, manager_pb2, protocol_pb2, statistics_pb2
@@ -26,6 +26,12 @@ name2='X3'
 name3='X4'
 name4='X5'
 
+reader = csv.DictReader(open('tests/test_data/FAH55104_SARS-CoV2_Tests_live_records.csv'))
+test_data = {}
+for row in reader:
+    for column, value in row.items():
+        test_data.setdefault(column, []).append(value)
+
 TEST_ACQUISITION = acquisition_pb2.AcquisitionRunInfo(run_id=str(uuid.uuid4()))
 
 TEST_PROTOCOL = protocol_pb2.ProtocolRunInfo(
@@ -36,7 +42,10 @@ TEST_PROTOCOL_WITH_ACQUISTIIONS = protocol_pb2.ProtocolRunInfo(
 )
 
 def generateTestAcquistionOutputStats():
-    read_count = round((round(time.time())%(72*24*3600))/10) # single new read per 10 sec
+    epoch_time = int(time.time())
+    test_data_csv_index = int(epoch_time/30) % 979 # 979 rows in csv file (30 sec interval)
+    read_count = int(test_data['minKNOW_read_count'][test_data_csv_index])
+    print(read_count)
     TEST_ACQUISITION_OUTPUT_STATS = [
         statistics_pb2.StreamAcquisitionOutputResponse(
             snapshots=[
