@@ -82,12 +82,20 @@ class InstanceService(instance_pb2_grpc.InstanceServiceServicer):
 class StatisticsService(statistics_pb2_grpc.StatisticsServiceServicer):
     def __init__(self, position_info):
         self.acquisition_outputs_per_run = {}
+        self.duty_times_per_run = {}
 
     def stream_acquisition_output(
         self, request: statistics_pb2.StreamAcquisitionOutputRequest, _context
     ) -> statistics_pb2.StreamAcquisitionOutputResponse:
         """Stream acquisition output data from a requested acquisition"""
         for packet in self.acquisition_outputs_per_run[request.acquisition_run_id]:
+            yield packet
+
+    def stream_duty_time(
+        self, request: statistics_pb2.StreamDutyTimeRequest, _context
+    ) -> statistics_pb2.StreamDutyTimeResponse:
+        """Stream duty time data from a requested acquisition"""
+        for packet in self.duty_times_per_run[request.acquisition_run_id]:
             yield packet
 
 
@@ -273,6 +281,14 @@ class SequencingPositionServer:
         self.statistics_service.acquisition_outputs_per_run[
             acquisition_run_id
         ] = acquisition_statistics
+
+    def set_duty_time_statistics(
+        self, acquisition_run_id, duty_time_statistics
+    ):
+        """Set list of protocols which have been run on the position"""
+        self.statistics_service.duty_times_per_run[
+            acquisition_run_id
+        ] = duty_time_statistics
 
     def stop(self):
         """Stop grpc server"""

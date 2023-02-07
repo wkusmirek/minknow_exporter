@@ -151,6 +151,22 @@ def generateTestAcquistionOutputStats():
     ]
     return TEST_ACQUISITION_OUTPUT_STATS
 
+def generateTestDutyTimeStats():
+    sequencing = statistics_pb2.StreamDutyTimeResponse.ChannelStateData(state_times=[1,3])
+    TEST_DUTY_TIME_STATS = [
+        statistics_pb2.StreamDutyTimeResponse(
+            bucket_ranges = [
+                statistics_pb2.StreamDutyTimeResponse.BucketRange(start=1,end=2000),
+                statistics_pb2.StreamDutyTimeResponse.BucketRange(start=2000,end=3000),
+                statistics_pb2.StreamDutyTimeResponse.BucketRange(start=3000,end=4000),
+            ],
+            channel_states = {
+                'sequencing': sequencing
+            }
+        )
+    ]
+    return TEST_DUTY_TIME_STATS
+
 def mock():
     positions = [
         #STATE_INITIALISING = 0;
@@ -257,18 +273,23 @@ def mock():
                 sequencing_position_0.set_protocol_runs([TEST_PROTOCOL_WITH_ACQUISTIIONS])
                 sequencing_position_0.set_acquisition_runs([TEST_ACQUISITION])
                 sequencing_position_0.set_acquisition_output_statistics(TEST_ACQUISITION.run_id, generateTestAcquistionOutputStats())
+                sequencing_position_0.set_duty_time_statistics(TEST_ACQUISITION.run_id, generateTestDutyTimeStats())
                 sequencing_position_1.set_protocol_runs([TEST_PROTOCOL_WITH_ACQUISTIIONS])
                 sequencing_position_1.set_acquisition_runs([TEST_ACQUISITION])
                 sequencing_position_1.set_acquisition_output_statistics(TEST_ACQUISITION.run_id, generateTestAcquistionOutputStats())
+                sequencing_position_1.set_duty_time_statistics(TEST_ACQUISITION.run_id, generateTestDutyTimeStats())
                 sequencing_position_2.set_protocol_runs([TEST_PROTOCOL_WITH_ACQUISTIIONS])
                 sequencing_position_2.set_acquisition_runs([TEST_ACQUISITION])
                 sequencing_position_2.set_acquisition_output_statistics(TEST_ACQUISITION.run_id, generateTestAcquistionOutputStats())
+                sequencing_position_2.set_duty_time_statistics(TEST_ACQUISITION.run_id, generateTestDutyTimeStats())
                 sequencing_position_3.set_protocol_runs([TEST_PROTOCOL_WITH_ACQUISTIIONS])
                 sequencing_position_3.set_acquisition_runs([TEST_ACQUISITION])
                 sequencing_position_3.set_acquisition_output_statistics(TEST_ACQUISITION.run_id, generateTestAcquistionOutputStats())
+                sequencing_position_3.set_duty_time_statistics(TEST_ACQUISITION.run_id, generateTestDutyTimeStats())
                 sequencing_position_4.set_protocol_runs([TEST_PROTOCOL_WITH_ACQUISTIIONS])
                 sequencing_position_4.set_acquisition_runs([TEST_ACQUISITION])
                 sequencing_position_4.set_acquisition_output_statistics(TEST_ACQUISITION.run_id, generateTestAcquistionOutputStats())
+                sequencing_position_4.set_duty_time_statistics(TEST_ACQUISITION.run_id, generateTestDutyTimeStats())
                 time.sleep(1)
 
 if __name__ == "__main__":

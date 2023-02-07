@@ -417,7 +417,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) {
 	}
 
 	var statistics []*RRRR
-	result2, err2 := exec.Command("python3", "python/extract_run_statistics.py").Output()
+	result2, err2 := exec.Command("python3", "python/stream_acquisition_output.py").Output()
 	if err2 != nil {
 		log.Fatal(err2)
 	}

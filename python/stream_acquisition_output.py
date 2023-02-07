@@ -46,32 +46,8 @@ def dump_statistics_for_acquisition(connection, acquisition_run_id, args):
     #report = do_title("Acquisition report", "=")
 
     result = list()
-    # Now iterate the stream and summarise each bucket as markdown
     for filter_groups in stream:
         for filter_group in filter_groups.snapshots:
-            # Find a title for this filter group:
-            #report += do_title(
-            #    "Output snapshots for "
-            #    + " and ".join(
-            #        format_filter_group(grp) for grp in filter_group.filtering
-            #    ),
-            #    "-",
-            #)
-
-            #report += (
-            #    "\t".join(
-            #        [
-            #            "Timestamp(s)",
-            #            "Passed Called reads",
-            #            "Failed Reads",
-            #            "Basecalled samples",
-            #        ]
-            #    )
-            #    + "\n"
-            #)
-            # Generate per snapshot summaries (one per line):
-            #
-            # See `acquisition.AcquisitionYieldSummary` in acquisition.proto for other fields that could be queried here.
             for snapshot in filter_group.snapshots:
                 # TODO brac tylko ostatni snapshot!!!!!!!!!!!!!!!!!!!!!!!!!
                 vars = dict()
@@ -95,24 +71,7 @@ def dump_statistics_for_acquisition(connection, acquisition_run_id, args):
                 vars['alignment_insertions'] = str(snapshot.yield_summary.alignment_insertions)
                 vars['alignment_deletions'] = str(snapshot.yield_summary.alignment_deletions)
                 vars['alignment_coverage'] = str(snapshot.yield_summary.alignment_coverage)
-                #vars['basecalled_pass_read_count'] = str(snapshot.yield_summary.basecalled_pass_read_count)
-                #vars['basecalled_fail_read_count'] = str(snapshot.yield_summary.basecalled_fail_read_count)
-                #vars['basecalled_samples'] = str(snapshot.yield_summary.basecalled_samples)
-                #cells = [
-                #    snapshot.seconds,  # timestamp(s)
-                #    snapshot.yield_summary.basecalled_pass_read_count,  # Passed Called reads
-                #    snapshot.yield_summary.basecalled_fail_read_count,  # Failed reads
-                #    snapshot.yield_summary.basecalled_samples,  # Total samples passed through the basecaller
-                #]
                 result.append(vars)
-                #report += "\t".join(str(c) for c in cells) + "\n"
-
-            #report += "\n"
-
-    #with open(
-    #    str(output_dir / ("acquisition_output_%s.md" % acquisition_run_id)), "w"
-    #) as file:
-    #    file.write(report)
     print('[' + ','.join(json.dumps(d) for d in result) + ']')
 
 
