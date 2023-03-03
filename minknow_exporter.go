@@ -42,7 +42,6 @@ const (
 )
 
 var (
-	clusterBrokers                   *prometheus.Desc
 	topicOldestOffset                *prometheus.Desc
 	topicPartitionLeader             *prometheus.Desc
 	readCountMetric                  *prometheus.Desc
@@ -62,6 +61,23 @@ var (
 	alignmentInsertionsMetric        *prometheus.Desc
 	alignmentDeletionsMetric         *prometheus.Desc
 	alignmentCoverageMetric          *prometheus.Desc
+	biasVoltageMetric                *prometheus.Desc
+	targetTempMetric                 *prometheus.Desc
+	asicTempMetric                   *prometheus.Desc
+	heatSinkTempMetric               *prometheus.Desc
+	pendingMuxChangeMetric           *prometheus.Desc
+	inrangeMetric                    *prometheus.Desc
+	aboveMetric                      *prometheus.Desc
+	strandMetric                     *prometheus.Desc
+	unavailableMetric                *prometheus.Desc
+	belowMetric                      *prometheus.Desc
+	multipleMetric                   *prometheus.Desc
+	saturatedMetric                  *prometheus.Desc
+	goodSingleMetric                 *prometheus.Desc
+	unknownMetric                    *prometheus.Desc
+	unclassifiedMetric               *prometheus.Desc
+	unblockingMetric                 *prometheus.Desc
+	adapterMetric                    *prometheus.Desc
 )
 
 type Exporter struct {
@@ -298,7 +314,6 @@ func NewExporter(opts kafkaOpts, topicFilter string, groupFilter string) (*Expor
 // Describe describes all the metrics ever exported by the Kafka exporter. It
 // implements prometheus.Collector.
 func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
-	ch <- clusterBrokers
 	ch <- topicOldestOffset
 	ch <- topicPartitionLeader
 	ch <- readCountMetric
@@ -318,6 +333,23 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- alignmentInsertionsMetric
 	ch <- alignmentDeletionsMetric
 	ch <- alignmentCoverageMetric
+	ch <- biasVoltageMetric
+	ch <- targetTempMetric
+	ch <- asicTempMetric
+	ch <- heatSinkTempMetric
+	ch <- pendingMuxChangeMetric
+	ch <- inrangeMetric
+	ch <- aboveMetric
+	ch <- strandMetric
+	ch <- unavailableMetric
+	ch <- belowMetric
+	ch <- multipleMetric
+	ch <- saturatedMetric
+	ch <- goodSingleMetric
+	ch <- unknownMetric
+	ch <- unclassifiedMetric
+	ch <- unblockingMetric
+	ch <- adapterMetric
 }
 
 // Collect fetches the stats from configured Kafka location and delivers them
@@ -371,13 +403,13 @@ func (e *Exporter) collectChans(quit chan struct{}) {
 	e.sgMutex.Unlock()
 }
 
-type ServiceData struct {
+type sequencingPositionsData struct {
 	Address string `json:'address'`
 	Name    string `json:'name'`
 	State   string `json:'state'`
 }
 
-type RRRR struct {
+type currentAcquisitionRunData struct {
 	Address                       string `json:'address'`
 	Name                          string `json:'name'`
 	Seconds                       string `json:'seconds'`
@@ -400,32 +432,64 @@ type RRRR struct {
 	Alignment_coverage            string `json:'alignment_coverage'`
 }
 
+type voltageData struct {
+	Address      string `json:'address'`
+	Name         string `json:'name'`
+	Bias_voltage string `json:'bias_voltage'`
+}
+
+type temperatureData struct {
+	Address        string `json:'address'`
+	Name           string `json:'name'`
+	Target_temp    string `json:'target_temp'`
+	Asic_temp      string `json:'asic_temp'`
+	Heat_sink_temp string `json:'heat_sink_temp'`
+}
+
+type channelStatesData struct {
+	Address            string `json:'address'`
+	Name               string `json:'name'`
+	Pending_mux_change string `json:'pending_mux_change'`
+	Inrange            string `json:'inrange'`
+	Above              string `json:'above'`
+	Strand             string `json:'strand'`
+	Unavailable        string `json:'unavailable'`
+	Below              string `json:'below'`
+	Multiple           string `json:'multiple'`
+	Saturated          string `json:'saturated'`
+	Good_single        string `json:'good_single'`
+	Unknown            string `json:'unknown'`
+	Unclassified       string `json:'unclassified'`
+	Unblocking         string `json:'unblocking'`
+	Adapter            string `json:'adapter'`
+}
+
 func (e *Exporter) collect(ch chan<- prometheus.Metric) {
-	var flowCells []*ServiceData
+	var sequencingPositions []*sequencingPositionsData
 	result, err := exec.Command("python3", "python/list_sequencing_positions.py").Output()
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = json.Unmarshal([]byte(result), &flowCells)
+	err = json.Unmarshal([]byte(result), &sequencingPositions)
 	if err != nil {
 		log.Fatal(err)
 	}
-	for _, flowCell := range flowCells {
+	for _, flowCell := range sequencingPositions {
 		ch <- prometheus.MustNewConstMetric(
 			topicOldestOffset, prometheus.GaugeValue, float64(1), flowCell.Address, flowCell.Name, flowCell.State,
 		)
 	}
 
-	var statistics []*RRRR
-	result2, err2 := exec.Command("python3", "python/stream_acquisition_output.py").Output()
+	var currentAcquisitionRun []*currentAcquisitionRunData
+	result2, err2 := exec.Command("python3", "python/get_current_acquisition_run.py").Output()
 	if err2 != nil {
 		log.Fatal(err2)
 	}
-	err2 = json.Unmarshal([]byte(result2), &statistics)
+	err2 = json.Unmarshal([]byte(result2), &currentAcquisitionRun)
 	if err2 != nil {
 		log.Fatal(err2)
 	}
-	for _, statistic := range statistics {
+	for _, statistic := range currentAcquisitionRun {
 		Read_count, _ := strconv.Atoi(statistic.Read_count)
 		Fraction_basecalled, _ := strconv.Atoi(statistic.Fraction_basecalled)
 		Fraction_skipped, _ := strconv.Atoi(statistic.Fraction_skipped)
@@ -547,9 +611,109 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) {
 		)
 	}
 
-	//	ch <- prometheus.MustNewConstMetric(
-	//		topicOldestOffset, prometheus.GaugeValue, float64(1), "asd",
-	//)
+	var voltage []*voltageData
+	result3, err3 := exec.Command("python3", "python/get_voltage.py").Output()
+	if err3 != nil {
+		log.Fatal(err3)
+	}
+	err3 = json.Unmarshal([]byte(result3), &voltage)
+	if err3 != nil {
+		log.Fatal(err3)
+	}
+	for _, v := range voltage {
+		Bias_voltage, _ := strconv.ParseFloat(v.Bias_voltage, 64)
+		ch <- prometheus.MustNewConstMetric(
+			biasVoltageMetric, prometheus.GaugeValue, float64(Bias_voltage), v.Address, v.Name,
+		)
+	}
+
+	var temperature []*temperatureData
+	result4, err4 := exec.Command("python3", "python/get_temperature.py").Output()
+	if err4 != nil {
+		log.Fatal(err4)
+	}
+	err4 = json.Unmarshal([]byte(result4), &temperature)
+	if err4 != nil {
+		log.Fatal(err4)
+	}
+	for _, t := range temperature {
+		Target_temp, _ := strconv.ParseFloat(t.Target_temp, 64)
+		Asic_temp, _ := strconv.ParseFloat(t.Asic_temp, 64)
+		Heat_sink_temp, _ := strconv.ParseFloat(t.Heat_sink_temp, 64)
+		ch <- prometheus.MustNewConstMetric(
+			targetTempMetric, prometheus.GaugeValue, float64(Target_temp), t.Address, t.Name,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			asicTempMetric, prometheus.GaugeValue, float64(Asic_temp), t.Address, t.Name,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			heatSinkTempMetric, prometheus.GaugeValue, float64(Heat_sink_temp), t.Address, t.Name,
+		)
+	}
+
+	var channelStates []*channelStatesData
+	result5, err5 := exec.Command("python3", "python/get_channel_states.py").Output()
+	if err5 != nil {
+		log.Fatal(err5)
+	}
+	err5 = json.Unmarshal([]byte(result5), &channelStates)
+	if err5 != nil {
+		log.Fatal(err5)
+	}
+	for _, s := range channelStates {
+		Pending_mux_change, _ := strconv.Atoi(s.Pending_mux_change)
+		Inrange, _ := strconv.Atoi(s.Inrange)
+		Above, _ := strconv.Atoi(s.Above)
+		Strand, _ := strconv.Atoi(s.Strand)
+		Unavailable, _ := strconv.Atoi(s.Unavailable)
+		Below, _ := strconv.Atoi(s.Below)
+		Multiple, _ := strconv.Atoi(s.Multiple)
+		Saturated, _ := strconv.Atoi(s.Saturated)
+		Good_single, _ := strconv.Atoi(s.Good_single)
+		Unknown, _ := strconv.Atoi(s.Unknown)
+		Unclassified, _ := strconv.Atoi(s.Unclassified)
+		Unblocking, _ := strconv.Atoi(s.Unblocking)
+		Adapter, _ := strconv.Atoi(s.Adapter)
+		ch <- prometheus.MustNewConstMetric(
+			pendingMuxChangeMetric, prometheus.GaugeValue, float64(Pending_mux_change), s.Address, s.Name,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			inrangeMetric, prometheus.GaugeValue, float64(Inrange), s.Address, s.Name,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			aboveMetric, prometheus.GaugeValue, float64(Above), s.Address, s.Name,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			strandMetric, prometheus.GaugeValue, float64(Strand), s.Address, s.Name,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			unavailableMetric, prometheus.GaugeValue, float64(Unavailable), s.Address, s.Name,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			belowMetric, prometheus.GaugeValue, float64(Below), s.Address, s.Name,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			multipleMetric, prometheus.GaugeValue, float64(Multiple), s.Address, s.Name,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			saturatedMetric, prometheus.GaugeValue, float64(Saturated), s.Address, s.Name,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			goodSingleMetric, prometheus.GaugeValue, float64(Good_single), s.Address, s.Name,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			unknownMetric, prometheus.GaugeValue, float64(Unknown), s.Address, s.Name,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			unclassifiedMetric, prometheus.GaugeValue, float64(Unclassified), s.Address, s.Name,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			unblockingMetric, prometheus.GaugeValue, float64(Unblocking), s.Address, s.Name,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			adapterMetric, prometheus.GaugeValue, float64(Adapter), s.Address, s.Name,
+		)
+	}
 
 	/*
 		files, _ := ioutil.ReadDir("/tmp/fast5")
@@ -1011,26 +1175,6 @@ func setup(
 	klog.V(INFO).Infoln("Starting kafka_exporter", version.Info())
 	klog.V(DEBUG).Infoln("Build context", version.BuildContext())
 
-	clusterBrokers = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "", "brokers"),
-		"Number of Brokers in the Kafka Cluster.",
-		nil, labels,
-	)
-	/*clusterBrokerInfo = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "", "broker_info"),
-		"Information about the Kafka Broker.",
-		[]string{"id", "address"}, labels,
-	)
-	topicPartitions = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "topic", "partitions"),
-		"Number of partitions for this Topic",
-		[]string{"topic"}, labels,
-	)
-	topicCurrentOffset = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "topic", "partition_current_offset"),
-		"Current Offset of a Broker at Topic/Partition",
-		[]string{"topic", "partition"}, labels,
-	)*/
 	topicOldestOffset = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "flowcell", "info"),
 		"Flowcell info",
@@ -1215,71 +1359,142 @@ func setup(
 			"alignment_coverage",
 		}, labels,
 	)
-	/*topicPartitionLeader = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "topic", "partition_leader"),
-		"Leader Broker ID of this Topic/Partition",
-		[]string{"topic", "partition"}, labels,
+	biasVoltageMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "bias_voltage"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+		}, labels,
 	)
-
-	topicPartitionReplicas = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "topic", "partition_replicas"),
-		"Number of Replicas for this Topic/Partition",
-		[]string{"topic", "partition"}, labels,
+	targetTempMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "target_temp"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+		}, labels,
 	)
-
-	topicPartitionInSyncReplicas = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "topic", "partition_in_sync_replica"),
-		"Number of In-Sync Replicas for this Topic/Partition",
-		[]string{"topic", "partition"}, labels,
+	asicTempMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "asic_temp"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+		}, labels,
 	)
-
-	topicPartitionUsesPreferredReplica = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "topic", "partition_leader_is_preferred"),
-		"1 if Topic/Partition is using the Preferred Broker",
-		[]string{"topic", "partition"}, labels,
+	heatSinkTempMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "heat_sink_temp"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+		}, labels,
 	)
-
-	topicUnderReplicatedPartition = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "topic", "partition_under_replicated_partition"),
-		"1 if Topic/Partition is under Replicated",
-		[]string{"topic", "partition"}, labels,
+	pendingMuxChangeMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "pending_mux_change"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+		}, labels,
 	)
-
-	consumergroupCurrentOffset = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "consumergroup", "current_offset"),
-		"Current Offset of a ConsumerGroup at Topic/Partition",
-		[]string{"consumergroup", "topic", "partition"}, labels,
+	inrangeMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "inrange"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+		}, labels,
 	)
-
-	consumergroupCurrentOffsetSum = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "consumergroup", "current_offset_sum"),
-		"Current Offset of a ConsumerGroup at Topic for all partitions",
-		[]string{"consumergroup", "topic"}, labels,
+	aboveMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "above"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+		}, labels,
 	)
-
-	consumergroupLag = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "consumergroup", "lag"),
-		"Current Approximate Lag of a ConsumerGroup at Topic/Partition",
-		[]string{"consumergroup", "topic", "partition"}, labels,
+	strandMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "strand"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+		}, labels,
 	)
-
-	consumergroupLagZookeeper = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "consumergroupzookeeper", "lag_zookeeper"),
-		"Current Approximate Lag(zookeeper) of a ConsumerGroup at Topic/Partition",
-		[]string{"consumergroup", "topic", "partition"}, nil,
+	unavailableMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "unavailable"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+		}, labels,
 	)
-
-	consumergroupLagSum = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "consumergroup", "lag_sum"),
-		"Current Approximate Lag of a ConsumerGroup at Topic for all partitions",
-		[]string{"consumergroup", "topic"}, labels,
+	belowMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "below"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+		}, labels,
 	)
-
-	consumergroupMembers = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "consumergroup", "members"),
-		"Amount of members in a consumer group",
-		[]string{"consumergroup"}, labels,
-	)*/
+	multipleMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "multiple"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+		}, labels,
+	)
+	saturatedMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "saturated"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+		}, labels,
+	)
+	goodSingleMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "good_single"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+		}, labels,
+	)
+	unknownMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "unknown"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+		}, labels,
+	)
+	unclassifiedMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "unclassified"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+		}, labels,
+	)
+	unblockingMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "unblocking"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+		}, labels,
+	)
+	adapterMetric = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "adapter"),
+		"Stats",
+		[]string{
+			"address",
+			"name",
+		}, labels,
+	)
 
 	if logSarama {
 		sarama.Logger = log.New(os.Stdout, "[sarama] ", log.LstdFlags)
