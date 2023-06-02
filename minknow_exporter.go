@@ -506,7 +506,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) {
 		Alignment_mismatches, _ := strconv.Atoi(statistic.Alignment_mismatches)
 		Alignment_insertions, _ := strconv.Atoi(statistic.Alignment_insertions)
 		Alignment_deletions, _ := strconv.Atoi(statistic.Alignment_deletions)
-		Alignment_coverage, _ := strconv.Atoi(statistic.Alignment_coverage)
+		Alignment_coverage, _ := strconv.ParseFloat(statistic.Alignment_coverage, 32)
 		ch <- prometheus.MustNewConstMetric(
 			readCountMetric, prometheus.GaugeValue, float64(Read_count),
 			statistic.Address,
